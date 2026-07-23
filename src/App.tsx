@@ -77,7 +77,7 @@ export default function Home() {
     if (!file) return;
     resetResults();
     if (file.type !== "application/pdf") {
-      setError("請選擇 PDF 檔案。");
+      setError("請餵我吃 PDF 檔案。");
       return;
     }
     setPdfFile(file);
@@ -90,7 +90,7 @@ export default function Home() {
       ["image/jpeg", "image/png", "image/webp"].includes(file.type),
     );
     if (!accepted.length) {
-      setError("請選擇 JPG、PNG 或 WebP 圖片。");
+      setError("請餵我吃 JPG、PNG 或 WebP 圖片。");
       return;
     }
     setImageFiles(accepted);
@@ -227,9 +227,9 @@ export default function Home() {
   return (
     <main>
       <header className="site-header">
-        <a className="brand" href="#" aria-label="輕壓工具箱首頁">
+        <a className="brand" href="#" aria-label="減法工具箱首頁">
           <span className="brand-mark">輕</span>
-          <span>輕壓工具箱</span>
+          <span>減法工具箱</span>
         </a>
         <span className="privacy-pill"><span>●</span> 檔案不會離開你的裝置</span>
       </header>
@@ -274,7 +274,7 @@ export default function Home() {
             <div className="setting-row">
               <div>
                 <label htmlFor="quality">壓縮品質</label>
-                <small>數值越低，檔案通常越小</small>
+                <small>數值越低，產出的檔案容量通常越小</small>
               </div>
               <strong>{quality}%</strong>
               <input id="quality" type="range" min="35" max="92" value={quality} onChange={(event) => setQuality(Number(event.target.value))} />
@@ -355,7 +355,7 @@ export default function Home() {
         <div><span>↯</span><strong>快速批次處理</strong><small>一次完成多張圖片壓縮</small></div>
       </section>
 
-      <footer>輕壓工具箱 · 你的檔案，只有你看得到。</footer>
+      <footer>減法工具箱 · 你的檔案，只有你看得到。</footer>
     </main>
   );
 }
