@@ -82,6 +82,17 @@ svg { width: 1.25rem; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 .choose-button:hover { border-color: var(--green); }
 
 .settings { padding: 25px 4px 2px; }
+.preset-section { margin-bottom: 22px; }
+.preset-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
+.preset-heading strong { display: block; font-size: .88rem; }
+.preset-heading small { display: block; color: var(--muted); margin-top: 3px; font-size: .72rem; }
+.preset-heading span { color: var(--green-dark); background: var(--mint); border-radius: 99px; padding: 5px 9px; font-size: .68rem; font-weight: 800; }
+.preset-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.preset-grid button { padding: 12px 8px; color: var(--muted); background: #f7faf8; border: 1px solid var(--line); border-radius: 11px; cursor: pointer; }
+.preset-grid button strong, .preset-grid button small { display: block; }
+.preset-grid button strong { font-size: .8rem; }
+.preset-grid button small { margin-top: 3px; font-size: .65rem; }
+.preset-grid button.active { color: var(--green-dark); background: var(--mint); border-color: #94ccb7; box-shadow: inset 0 0 0 1px rgba(29,138,107,.08); }
 .setting-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 16px; }
 .setting-row label, .option-grid label { font-size: .88rem; font-weight: 800; }
 .setting-row small, .option-grid small { display: block; color: var(--muted); font-weight: 400; margin-top: 4px; }
@@ -138,6 +149,9 @@ footer { border-top: 1px solid #e5ece8; padding: 24px; text-align: center; color
   .tool-body { padding: 16px; }
   .drop-zone { min-height: 220px; }
   .option-grid.two-columns { grid-template-columns: 1fr; }
+  .preset-grid { grid-template-columns: 1fr; }
+  .preset-grid button { display: flex; align-items: center; justify-content: space-between; padding: 11px 13px; }
+  .preset-grid button small { margin: 0; }
   .result-panel, .results-heading { align-items: stretch; flex-direction: column; }
   .result-panel a, .results-heading button { justify-content: center; }
   .image-results li { grid-template-columns: auto 1fr auto; }

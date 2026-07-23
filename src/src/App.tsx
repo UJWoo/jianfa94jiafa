@@ -6,12 +6,18 @@ import { PDFDocument } from "pdf-lib";
 import "./styles.css";
 
 type Mode = "pdf" | "image";
-type ImageFormat = "image/jpeg" | "image/webp" | "image/png";
+type ImageFormat = "original" | "image/jpeg" | "image/webp" | "image/png";
+type CompressionPreset = "light" | "standard" | "strong" | "custom";
 
 type ImageResult = {
   name: string;
   originalSize: number;
   resultSize: number;
+  originalWidth: number;
+  originalHeight: number;
+  outputWidth: number;
+  outputHeight: number;
+  keptOriginal: boolean;
   url: string;
   blob: Blob;
 };
@@ -34,6 +40,16 @@ const isSupportedImage = (file: File) =>
 const isHeicImage = (file: File) =>
   ["image/heic", "image/heif"].includes(file.type.toLowerCase()) ||
   ["heic", "heif"].includes(getExtension(file.name));
+
+const getOriginalOutputFormat = (file: File): Exclude<ImageFormat, "original"> => {
+  if (["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    return file.type as Exclude<ImageFormat, "original">;
+  }
+  const extension = getExtension(file.name);
+  if (extension === "png") return "image/png";
+  if (extension === "webp") return "image/webp";
+  return "image/jpeg";
+};
 
 const loadImage = async (file: File): Promise<LoadedImage> => {
   let sourceBlob: Blob = file;
@@ -115,8 +131,9 @@ export default function Home() {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [quality, setQuality] = useState(72);
   const [pdfScale, setPdfScale] = useState(1.45);
-  const [maxWidth, setMaxWidth] = useState(1920);
-  const [format, setFormat] = useState<ImageFormat>("image/jpeg");
+  const [maxWidth, setMaxWidth] = useState(99999);
+  const [format, setFormat] = useState<ImageFormat>("original");
+  const [preset, setPreset] = useState<CompressionPreset>("light");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
@@ -137,6 +154,14 @@ export default function Home() {
   const selectMode = (next: Mode) => {
     resetResults();
     setMode(next);
+    if (next === "image") {
+      setPreset("light");
+      setQuality(92);
+      setMaxWidth(99999);
+      setFormat("original");
+    } else {
+      setQuality(72);
+    }
   };
 
   const acceptPdf = (files: FileList | null) => {
@@ -163,6 +188,21 @@ export default function Home() {
     setImageFiles(accepted);
     if (accepted.length !== selected.length) {
       setError(`已略過 ${selected.length - accepted.length} 個不支援的檔案。`);
+    }
+  };
+
+  const applyPreset = (next: Exclude<CompressionPreset, "custom">) => {
+    setPreset(next);
+    setFormat("original");
+    if (next === "light") {
+      setQuality(92);
+      setMaxWidth(99999);
+    } else if (next === "standard") {
+      setQuality(85);
+      setMaxWidth(2560);
+    } else {
+      setQuality(72);
+      setMaxWidth(1920);
     }
   };
 
@@ -238,7 +278,8 @@ export default function Home() {
         canvas.height = Math.max(1, Math.round(loaded.height * ratio));
         const context = canvas.getContext("2d");
         if (!context) throw new Error("瀏覽器無法建立圖片畫布。");
-        if (format === "image/jpeg") {
+        const outputFormat = format === "original" ? getOriginalOutputFormat(file) : format;
+        if (outputFormat === "image/jpeg") {
           context.fillStyle = "#ffffff";
           context.fillRect(0, 0, canvas.width, canvas.height);
         }
@@ -247,18 +288,25 @@ export default function Home() {
         const blob = await new Promise<Blob>((resolve, reject) =>
           canvas.toBlob(
             (value) => (value ? resolve(value) : reject(new Error("圖片轉換失敗。"))),
-            format,
+            outputFormat,
             quality / 100,
           ),
         );
-        const extension = format.split("/")[1].replace("jpeg", "jpg");
+        const keptOriginal = blob.size >= file.size;
+        const resultBlob = keptOriginal ? file : blob;
+        const extension = outputFormat.split("/")[1].replace("jpeg", "jpg");
         const baseName = file.name.replace(/\.[^.]+$/, "");
         results.push({
-          name: `${baseName}-compressed.${extension}`,
+          name: keptOriginal ? file.name : `${baseName}-compressed.${extension}`,
           originalSize: file.size,
-          resultSize: blob.size,
-          blob,
-          url: URL.createObjectURL(blob),
+          resultSize: resultBlob.size,
+          originalWidth: loaded.width,
+          originalHeight: loaded.height,
+          outputWidth: keptOriginal ? loaded.width : canvas.width,
+          outputHeight: keptOriginal ? loaded.height : canvas.height,
+          keptOriginal,
+          blob: resultBlob,
+          url: URL.createObjectURL(resultBlob),
         });
       }
       setImageResults(results);
@@ -351,13 +399,45 @@ export default function Home() {
           </div>
 
           <div className="settings">
+            {mode === "image" && (
+              <div className="preset-section">
+                <div className="preset-heading">
+                  <div>
+                    <strong>壓縮模式</strong>
+                    <small>輕度壓縮會保留原始解析度</small>
+                  </div>
+                  {preset === "custom" && <span>自訂設定</span>}
+                </div>
+                <div className="preset-grid">
+                  <button className={preset === "light" ? "active" : ""} onClick={() => applyPreset("light")}>
+                    <strong>輕度</strong><small>原尺寸 · 92%</small>
+                  </button>
+                  <button className={preset === "standard" ? "active" : ""} onClick={() => applyPreset("standard")}>
+                    <strong>標準</strong><small>2560 px · 85%</small>
+                  </button>
+                  <button className={preset === "strong" ? "active" : ""} onClick={() => applyPreset("strong")}>
+                    <strong>高度</strong><small>1920 px · 72%</small>
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="setting-row">
               <div>
                 <label htmlFor="quality">壓縮品質</label>
                 <small>數值越低，檔案通常越小</small>
               </div>
               <strong>{quality}%</strong>
-              <input id="quality" type="range" min="35" max="92" value={quality} onChange={(event) => setQuality(Number(event.target.value))} />
+              <input
+                id="quality"
+                type="range"
+                min={mode === "pdf" ? "35" : "50"}
+                max={mode === "pdf" ? "92" : "100"}
+                value={quality}
+                onChange={(event) => {
+                  setQuality(Number(event.target.value));
+                  if (mode === "image") setPreset("custom");
+                }}
+              />
             </div>
 
             {mode === "pdf" ? (
@@ -374,15 +454,22 @@ export default function Home() {
             ) : (
               <div className="option-grid two-columns">
                 <label>最長邊尺寸
-                  <select value={maxWidth} onChange={(event) => setMaxWidth(Number(event.target.value))}>
+                  <select value={maxWidth} onChange={(event) => {
+                    setMaxWidth(Number(event.target.value));
+                    setPreset("custom");
+                  }}>
+                    <option value="99999">保留原尺寸（建議）</option>
                     <option value="1280">1280 px</option>
-                    <option value="1920">1920 px（建議）</option>
+                    <option value="1920">1920 px</option>
                     <option value="2560">2560 px</option>
-                    <option value="99999">保留原尺寸</option>
                   </select>
                 </label>
                 <label>輸出格式
-                  <select value={format} onChange={(event) => setFormat(event.target.value as ImageFormat)}>
+                  <select value={format} onChange={(event) => {
+                    setFormat(event.target.value as ImageFormat);
+                    setPreset("custom");
+                  }}>
+                    <option value="original">與原檔相同（建議）</option>
                     <option value="image/jpeg">JPG</option>
                     <option value="image/webp">WebP</option>
                     <option value="image/png">PNG</option>
@@ -419,7 +506,13 @@ export default function Home() {
                   <li key={item.name}>
                     <span className="file-dot">✓</span>
                     <span className="file-name">{item.name}</span>
-                    <small>{formatBytes(item.originalSize)} → {formatBytes(item.resultSize)}</small>
+                    <small>
+                      {item.originalWidth} × {item.originalHeight} → {item.outputWidth} × {item.outputHeight}
+                      <br />
+                      {item.keptOriginal
+                        ? `原檔已較精簡，保留 ${formatBytes(item.originalSize)}`
+                        : `${formatBytes(item.originalSize)} → ${formatBytes(item.resultSize)}`}
+                    </small>
                     <a href={item.url} download={item.name} aria-label={`下載 ${item.name}`}><DownloadIcon /></a>
                   </li>
                 ))}
