@@ -5,9 +5,25 @@ import JSZip from "jszip";
 import { PDFDocument } from "pdf-lib";
 import "./styles.css";
 
-type Mode = "pdf" | "image";
+type Mode = "pdf" | "image" | "merge";
 type ImageFormat = "original" | "image/jpeg" | "image/webp" | "image/png";
 type CompressionPreset = "light" | "standard" | "strong" | "custom";
+type BlankPageMode = "a4-portrait" | "a4-landscape" | "previous" | "next";
+
+type MergePdfItem = {
+  id: string;
+  kind: "pdf";
+  file: File;
+  pageCount: number;
+};
+
+type MergeBlankItem = {
+  id: string;
+  kind: "blank";
+  sizeMode: BlankPageMode;
+};
+
+type MergeItem = MergePdfItem | MergeBlankItem;
 
 type ImageResult = {
   name: string;
@@ -139,17 +155,25 @@ export default function Home() {
   const [error, setError] = useState("");
   const [pdfResult, setPdfResult] = useState<{ url: string; size: number } | null>(null);
   const [imageResults, setImageResults] = useState<ImageResult[]>([]);
+  const [mergeItems, setMergeItems] = useState<MergeItem[]>([]);
+  const [blankPageMode, setBlankPageMode] = useState<BlankPageMode>("a4-portrait");
+  const [mergeFileName, setMergeFileName] = useState("merged-document.pdf");
+  const [mergeResult, setMergeResult] = useState<{ url: string; size: number; pageCount: number } | null>(null);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const pdfInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
+  const mergeInput = useRef<HTMLInputElement>(null);
 
   const resetResults = useCallback(() => {
     if (pdfResult) URL.revokeObjectURL(pdfResult.url);
+    if (mergeResult) URL.revokeObjectURL(mergeResult.url);
     imageResults.forEach((item) => URL.revokeObjectURL(item.url));
     setPdfResult(null);
+    setMergeResult(null);
     setImageResults([]);
     setError("");
     setProgress("");
-  }, [pdfResult, imageResults]);
+  }, [pdfResult, mergeResult, imageResults]);
 
   const selectMode = (next: Mode) => {
     resetResults();
@@ -203,6 +227,150 @@ export default function Home() {
     } else {
       setQuality(72);
       setMaxWidth(1920);
+    }
+  };
+
+  const acceptMergePdfs = async (files: FileList | null) => {
+    if (!files?.length) return;
+    resetResults();
+    setBusy(true);
+    const nextItems: MergePdfItem[] = [];
+    const selected = Array.from(files).filter(
+      (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
+    );
+    try {
+      for (let index = 0; index < selected.length; index += 1) {
+        const file = selected[index];
+        setProgress(`正在讀取第 ${index + 1} / ${selected.length} 份 PDF`);
+        try {
+          const document = await PDFDocument.load(await file.arrayBuffer());
+          nextItems.push({
+            id: crypto.randomUUID(),
+            kind: "pdf",
+            file,
+            pageCount: document.getPageCount(),
+          });
+        } catch {
+          setError(`無法讀取「${file.name}」，檔案可能已加密或損壞。`);
+        }
+      }
+      setMergeItems((current) => [...current, ...nextItems]);
+      if (!selected.length) setError("請選擇 PDF 檔案。");
+    } finally {
+      setProgress("");
+      setBusy(false);
+    }
+  };
+
+  const insertBlankPage = (index: number) => {
+    resetResults();
+    setMergeItems((current) => {
+      const next = [...current];
+      next.splice(index, 0, {
+        id: crypto.randomUUID(),
+        kind: "blank",
+        sizeMode: blankPageMode,
+      });
+      return next;
+    });
+  };
+
+  const removeMergeItem = (id: string) => {
+    resetResults();
+    setMergeItems((current) => current.filter((item) => item.id !== id));
+  };
+
+  const moveMergeItem = (id: string, direction: -1 | 1) => {
+    resetResults();
+    setMergeItems((current) => {
+      const index = current.findIndex((item) => item.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const dropMergeItem = (targetId: string) => {
+    if (!draggedItemId || draggedItemId === targetId) return;
+    resetResults();
+    setMergeItems((current) => {
+      const from = current.findIndex((item) => item.id === draggedItemId);
+      const to = current.findIndex((item) => item.id === targetId);
+      if (from < 0 || to < 0) return current;
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    setDraggedItemId(null);
+  };
+
+  const mergePdfs = async () => {
+    if (!mergeItems.some((item) => item.kind === "pdf")) return;
+    resetResults();
+    setBusy(true);
+    const loadedDocuments = new Map<string, PDFDocument>();
+    try {
+      const pdfItems = mergeItems.filter((item): item is MergePdfItem => item.kind === "pdf");
+      for (let index = 0; index < pdfItems.length; index += 1) {
+        const item = pdfItems[index];
+        setProgress(`正在載入第 ${index + 1} / ${pdfItems.length} 份 PDF`);
+        try {
+          loadedDocuments.set(item.id, await PDFDocument.load(await item.file.arrayBuffer()));
+        } catch {
+          throw new Error(`無法合併「${item.file.name}」，檔案可能已加密或損壞。`);
+        }
+      }
+
+      const output = await PDFDocument.create();
+      let lastPageSize: { width: number; height: number } | null = null;
+
+      for (let index = 0; index < mergeItems.length; index += 1) {
+        const item = mergeItems[index];
+        setProgress(`正在合併第 ${index + 1} / ${mergeItems.length} 個項目`);
+        if (item.kind === "pdf") {
+          const source = loadedDocuments.get(item.id);
+          if (!source) continue;
+          const copiedPages = await output.copyPages(source, source.getPageIndices());
+          copiedPages.forEach((page) => {
+            output.addPage(page);
+            lastPageSize = page.getSize();
+          });
+          continue;
+        }
+
+        let pageSize = { width: 595.28, height: 841.89 };
+        if (item.sizeMode === "a4-landscape") {
+          pageSize = { width: 841.89, height: 595.28 };
+        } else if (item.sizeMode === "previous" && lastPageSize) {
+          pageSize = lastPageSize;
+        } else if (item.sizeMode === "next") {
+          const nextPdf = mergeItems
+            .slice(index + 1)
+            .find((candidate): candidate is MergePdfItem => candidate.kind === "pdf");
+          const nextDocument = nextPdf ? loadedDocuments.get(nextPdf.id) : null;
+          if (nextDocument?.getPageCount()) pageSize = nextDocument.getPage(0).getSize();
+          else if (lastPageSize) pageSize = lastPageSize;
+        }
+        output.addPage([pageSize.width, pageSize.height]);
+        lastPageSize = pageSize;
+      }
+
+      setProgress("正在建立合併檔案");
+      const bytes = await output.save({ useObjectStreams: true });
+      const blob = new Blob([new Uint8Array(bytes)], { type: "application/pdf" });
+      setMergeResult({
+        url: URL.createObjectURL(blob),
+        size: blob.size,
+        pageCount: output.getPageCount(),
+      });
+      setProgress("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "PDF 合併失敗，請重新嘗試。");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -341,6 +509,14 @@ export default function Home() {
     () => imageResults.reduce((sum, item) => sum + item.originalSize, 0),
     [imageResults],
   );
+  const mergePageCount = useMemo(
+    () => mergeItems.reduce(
+      (sum, item) => sum + (item.kind === "pdf" ? item.pageCount : 1),
+      0,
+    ),
+    [mergeItems],
+  );
+  const normalizedMergeFileName = `${mergeFileName.trim().replace(/\.pdf$/i, "") || "merged-document"}.pdf`;
 
   return (
     <main>
@@ -353,9 +529,9 @@ export default function Home() {
       </header>
 
       <section className="hero">
-        <div className="eyebrow">PDF & IMAGE COMPRESSOR</div>
+        <div className="eyebrow">PDF & IMAGE TOOLBOX</div>
         <h1>檔案變輕，<em>品質依然清晰。</em></h1>
-        <p>免費壓縮 PDF 與圖片。不用註冊、不用上傳，所有處理都在你的瀏覽器中完成。</p>
+        <p>免費壓縮圖片與 PDF，也能合併多份 PDF。不用註冊、不用上傳，所有處理都在你的瀏覽器中完成。</p>
       </section>
 
       <section className="tool-shell" aria-label="檔案壓縮工具">
@@ -366,9 +542,155 @@ export default function Home() {
           <button className={mode === "image" ? "active" : ""} onClick={() => selectMode("image")} role="tab" aria-selected={mode === "image"}>
             <span className="tab-icon image-tab">▧</span> 壓縮圖片
           </button>
+          <button className={mode === "merge" ? "active" : ""} onClick={() => selectMode("merge")} role="tab" aria-selected={mode === "merge"}>
+            <span className="tab-icon merge-tab">＋</span> 合併 PDF
+          </button>
         </div>
 
         <div className="tool-body">
+          {mode === "merge" ? (
+            <div className="merge-tool">
+              <div
+                className="merge-upload"
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  void acceptMergePdfs(event.dataTransfer.files);
+                }}
+              >
+                <div>
+                  <strong>加入要合併的 PDF</strong>
+                  <small>可一次選擇多份，也能稍後繼續加入</small>
+                </div>
+                <button className="choose-button" onClick={() => mergeInput.current?.click()}>
+                  ＋ 選擇 PDF
+                </button>
+                <input
+                  ref={mergeInput}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  multiple
+                  hidden
+                  onChange={(event) => {
+                    void acceptMergePdfs(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </div>
+
+              <div className="blank-settings">
+                <label>
+                  空白頁尺寸
+                  <select value={blankPageMode} onChange={(event) => setBlankPageMode(event.target.value as BlankPageMode)}>
+                    <option value="a4-portrait">A4 直式</option>
+                    <option value="a4-landscape">A4 橫式</option>
+                    <option value="previous">沿用前一頁尺寸</option>
+                    <option value="next">沿用下一頁尺寸</option>
+                  </select>
+                </label>
+                <button onClick={() => insertBlankPage(mergeItems.length)}>＋ 在最後插入空白頁</button>
+              </div>
+
+              {mergeItems.length === 0 ? (
+                <div className="merge-empty">
+                  <span>PDF</span>
+                  <strong>尚未加入合併項目</strong>
+                  <small>加入至少一份 PDF 後，即可排序並插入空白頁。</small>
+                </div>
+              ) : (
+                <>
+                  <div className="merge-list-heading">
+                    <div>
+                      <strong>合併順序</strong>
+                      <small>拖曳項目，或使用箭頭調整順序</small>
+                    </div>
+                    <button onClick={() => {
+                      resetResults();
+                      setMergeItems([]);
+                    }}>全部清除</button>
+                  </div>
+                  <div className="merge-sequence">
+                    <button className="insert-blank" onClick={() => insertBlankPage(0)}>＋ 在此插入空白頁</button>
+                    {mergeItems.map((item, index) => (
+                      <div key={item.id}>
+                        <article
+                          className={`merge-item ${item.kind === "blank" ? "blank-item" : ""}`}
+                          draggable
+                          onDragStart={() => setDraggedItemId(item.id)}
+                          onDragEnd={() => setDraggedItemId(null)}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={() => dropMergeItem(item.id)}
+                        >
+                          <span className="drag-handle" aria-hidden="true">⠿</span>
+                          <span className="merge-type">{item.kind === "pdf" ? "PDF" : "空白"}</span>
+                          <div className="merge-details">
+                            <strong>{item.kind === "pdf" ? item.file.name : "空白頁"}</strong>
+                            <small>
+                              {item.kind === "pdf"
+                                ? `${item.pageCount} 頁 · ${formatBytes(item.file.size)}`
+                                : item.sizeMode === "a4-portrait"
+                                  ? "A4 直式"
+                                  : item.sizeMode === "a4-landscape"
+                                    ? "A4 橫式"
+                                    : item.sizeMode === "previous"
+                                      ? "沿用前一頁尺寸"
+                                      : "沿用下一頁尺寸"}
+                            </small>
+                          </div>
+                          <div className="merge-actions">
+                            <button disabled={index === 0} onClick={() => moveMergeItem(item.id, -1)} aria-label="向上移動">↑</button>
+                            <button disabled={index === mergeItems.length - 1} onClick={() => moveMergeItem(item.id, 1)} aria-label="向下移動">↓</button>
+                            <button className="remove-button" onClick={() => removeMergeItem(item.id)} aria-label="刪除項目">×</button>
+                          </div>
+                        </article>
+                        <button className="insert-blank" onClick={() => insertBlankPage(index + 1)}>＋ 在此插入空白頁</button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div className="merge-output">
+                <label>
+                  輸出檔名
+                  <input
+                    value={mergeFileName}
+                    onChange={(event) => setMergeFileName(event.target.value)}
+                    placeholder="merged-document.pdf"
+                  />
+                </label>
+                <div className="merge-summary">
+                  <span>{mergeItems.filter((item) => item.kind === "pdf").length} 份 PDF</span>
+                  <span>{mergeItems.filter((item) => item.kind === "blank").length} 張空白頁</span>
+                  <strong>共 {mergePageCount} 頁</strong>
+                </div>
+              </div>
+
+              {error && <div className="error" role="alert">{error}</div>}
+              {progress && <div className="progress"><span className="spinner" />{progress}</div>}
+              <button
+                className="primary-button"
+                disabled={busy || !mergeItems.some((item) => item.kind === "pdf")}
+                onClick={mergePdfs}
+              >
+                {busy ? "合併處理中…" : "合併並建立 PDF"}
+              </button>
+
+              {mergeResult && (
+                <div className="result-panel">
+                  <div>
+                    <span className="success-check">✓</span>
+                    <div>
+                      <strong>PDF 合併完成</strong>
+                      <small>{mergeResult.pageCount} 頁 · {formatBytes(mergeResult.size)}</small>
+                    </div>
+                  </div>
+                  <a href={mergeResult.url} download={normalizedMergeFileName}><DownloadIcon />下載合併 PDF</a>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
           <div
             className="drop-zone"
             onDragOver={(event) => event.preventDefault()}
@@ -518,6 +840,8 @@ export default function Home() {
                 ))}
               </ul>
             </div>
+          )}
+            </>
           )}
         </div>
       </section>

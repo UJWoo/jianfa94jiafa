@@ -53,11 +53,12 @@ svg { width: 1.25rem; fill: none; stroke: currentColor; stroke-width: 1.8; strok
   overflow: hidden;
 }
 
-.tabs { display: grid; grid-template-columns: 1fr 1fr; padding: 8px; background: #f0f5f2; border-bottom: 1px solid var(--line); }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); padding: 8px; background: #f0f5f2; border-bottom: 1px solid var(--line); }
 .tabs button { border: 0; border-radius: 15px; color: #70817c; background: transparent; padding: 15px; font-weight: 800; cursor: pointer; }
 .tabs button.active { color: var(--green-dark); background: white; box-shadow: 0 3px 12px rgba(22,73,58,.08); }
 .tab-icon { display: inline-grid; place-items: center; width: 28px; height: 22px; margin-right: 7px; border: 1.5px solid currentColor; border-radius: 5px; font-size: .56rem; vertical-align: middle; }
 .image-tab { font-size: 1rem; }
+.merge-tab { font-size: .95rem; }
 .tool-body { padding: 28px; }
 
 .drop-zone {
@@ -131,6 +132,99 @@ svg { width: 1.25rem; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 .image-results li small { color: var(--muted); }
 .image-results li a { color: var(--green); }
 
+.merge-tool { display: grid; gap: 18px; }
+.merge-upload {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  background: #f8fcfa;
+  border: 1.5px dashed #96c8b7;
+  border-radius: 16px;
+}
+.merge-upload strong, .merge-upload small { display: block; }
+.merge-upload strong { font-size: .9rem; }
+.merge-upload small { color: var(--muted); margin-top: 4px; font-size: .72rem; }
+.blank-settings {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 12px;
+  padding: 14px;
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+}
+.blank-settings label, .merge-output label { display: grid; gap: 7px; font-size: .78rem; font-weight: 800; }
+.blank-settings select, .merge-output input {
+  color: var(--ink);
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 11px;
+  outline: none;
+}
+.blank-settings button, .merge-list-heading button {
+  color: var(--green-dark);
+  background: white;
+  border: 1px solid #b8dccc;
+  border-radius: 9px;
+  padding: 10px 12px;
+  font-size: .75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.merge-empty {
+  display: grid;
+  place-items: center;
+  padding: 34px 20px;
+  text-align: center;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.merge-empty span { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 10px; color: var(--green-dark); background: var(--mint); border-radius: 13px; font-size: .68rem; font-weight: 900; }
+.merge-empty strong { color: var(--ink); font-size: .88rem; }
+.merge-empty small { margin-top: 5px; font-size: .72rem; }
+.merge-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.merge-list-heading strong, .merge-list-heading small { display: block; }
+.merge-list-heading strong { font-size: .88rem; }
+.merge-list-heading small { color: var(--muted); margin-top: 3px; font-size: .7rem; }
+.merge-sequence { display: grid; }
+.merge-item {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 13px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(26,78,62,.05);
+}
+.merge-item[draggable="true"] { cursor: grab; }
+.merge-item[draggable="true"]:active { cursor: grabbing; }
+.blank-item { background: #fffaf0; border-color: #eddfbd; }
+.drag-handle { color: #9aaca6; font-size: 1.25rem; line-height: 1; }
+.merge-type { display: grid; place-items: center; width: 38px; height: 34px; color: var(--green-dark); background: var(--mint); border-radius: 9px; font-size: .6rem; font-weight: 900; }
+.blank-item .merge-type { color: #806a37; background: #f5eacb; }
+.merge-details { min-width: 0; }
+.merge-details strong, .merge-details small { display: block; }
+.merge-details strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8rem; }
+.merge-details small { color: var(--muted); margin-top: 3px; font-size: .68rem; }
+.merge-actions { display: flex; gap: 5px; }
+.merge-actions button { display: grid; place-items: center; width: 29px; height: 29px; color: var(--green-dark); background: #f3f8f5; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.merge-actions button:disabled { opacity: .3; cursor: not-allowed; }
+.merge-actions .remove-button { color: #a24b4b; background: #fff5f5; border-color: #f0d7d7; }
+.insert-blank { justify-self: center; color: #7c6b45; background: transparent; border: 0; padding: 7px 12px; font-size: .66rem; cursor: pointer; }
+.insert-blank:hover { color: var(--green-dark); }
+.merge-output { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 16px; padding-top: 4px; }
+.merge-summary { display: flex; align-items: center; gap: 8px; padding-bottom: 3px; }
+.merge-summary span, .merge-summary strong { padding: 5px 8px; border-radius: 7px; font-size: .68rem; white-space: nowrap; }
+.merge-summary span { color: var(--muted); background: #f2f5f3; }
+.merge-summary strong { color: var(--green-dark); background: var(--mint); }
+
 .trust-row { width: min(860px, calc(100% - 40px)); margin: 54px auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
 .trust-row > div { display: grid; grid-template-columns: 38px 1fr; align-items: center; column-gap: 10px; }
 .trust-row span { grid-row: 1 / 3; display: grid; place-items: center; width: 38px; height: 38px; color: var(--green); background: var(--mint); border-radius: 12px; font-weight: 900; }
@@ -146,6 +240,8 @@ footer { border-top: 1px solid #e5ece8; padding: 24px; text-align: center; color
   .hero h1 { font-size: 2.65rem; }
   .hero p { font-size: .88rem; }
   .tool-shell { width: calc(100% - 20px); border-radius: 21px; }
+  .tabs button { padding: 12px 5px; font-size: .72rem; }
+  .tab-icon { display: none; }
   .tool-body { padding: 16px; }
   .drop-zone { min-height: 220px; }
   .option-grid.two-columns { grid-template-columns: 1fr; }
@@ -156,6 +252,13 @@ footer { border-top: 1px solid #e5ece8; padding: 24px; text-align: center; color
   .result-panel a, .results-heading button { justify-content: center; }
   .image-results li { grid-template-columns: auto 1fr auto; }
   .image-results li small { display: none; }
+  .merge-upload { align-items: stretch; flex-direction: column; }
+  .merge-upload .choose-button { width: 100%; }
+  .blank-settings, .merge-output { grid-template-columns: 1fr; }
+  .blank-settings button { width: 100%; }
+  .merge-item { grid-template-columns: auto auto minmax(0, 1fr); }
+  .merge-actions { grid-column: 2 / -1; justify-content: flex-end; }
+  .merge-summary { flex-wrap: wrap; }
   .trust-row { grid-template-columns: 1fr; width: min(300px, calc(100% - 40px)); gap: 18px; }
 }
 
